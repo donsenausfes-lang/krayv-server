@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const db = require('./db');
-const { createInvoiceLink } = require('./bot');
+const { bot, createInvoiceLink } = require('./bot');
 
 const app = express();
 app.use(cors());
@@ -24,12 +24,32 @@ app.get('/api/user/:id', (req, res) => {
   res.json(user);
 });
 
-// Создать заказ
+// Создать заказ + уведомить админа
 app.post('/api/order', (req, res) => {
   const { userId, items, total } = req.body;
+
   const info = db.prepare(
     'INSERT INTO orders (user_id, items, total) VALUES (?, ?, ?)'
   ).run(userId, JSON.stringify(items), total);
+
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
+  const userName = user
+    ? (user.first_name || '') + ' ' + (user.last_name || '') + ' (@' + (user.username || 'нет') + ')'
+    : 'ID ' + userId;
+
+  let msg = '🛒 <b>Новый заказ!</b>\n\n';
+  msg += '👤 Покупатель: ' + userName + '\n';
+  msg += '🆔 ID: ' + userId + '\n\n';
+  msg += '<b>Товары:</b>\n';
+  items.forEach(i => {
+    const variant = i.optionLabel ? ' (' + i.optionLabel + ')' : '';
+    msg += '• ' + i.name + variant + ' × ' + i.qty + ' = ' + (i.price * i.qty) + ' ⭐\n';
+  });
+  msg += '\n💰 <b>Итого: ' + total + ' ⭐</b>';
+
+  bot.sendMessage(ADMIN_ID, msg, { parse_mode: 'HTML' })
+    .catch(err => console.error('Ошибка отправки админу:', err));
+
   res.json({ ok: true, orderId: info.lastInsertRowid });
 });
 
@@ -51,26 +71,23 @@ app.post('/api/pay', async (req, res) => {
 
 // ==== API для админки ====
 
-// Все пользователи
 app.get('/api/admin/users', (req, res) => {
   const users = db.prepare('SELECT * FROM users ORDER BY created_at DESC').all();
   res.json(users);
 });
 
-// Изменить баланс
 app.post('/api/admin/balance', (req, res) => {
   const { userId, amount } = req.body;
   db.prepare('UPDATE users SET balance = balance + ? WHERE id = ?').run(amount, userId);
   res.json({ ok: true });
 });
 
-// Все заказы
 app.get('/api/admin/orders', (req, res) => {
   const orders = db.prepare('SELECT * FROM orders ORDER BY id DESC').all();
   res.json(orders);
 });
 
-// ==== Раздача админки ====
+// ==== Раздача admin.html ====
 app.get('/admin', (req, res) => {
   res.sendFile(__dirname + '/admin.html');
 });
