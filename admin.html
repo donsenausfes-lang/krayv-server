@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Krayv Admin</title>
+<style>
+  body { font-family: system-ui; background: #0f0f14; color: #fff; padding: 20px; }
+  h1 { color: #2481cc; }
+  table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+  th, td { padding: 10px; border-bottom: 1px solid #2a2a33; text-align: left; font-size: 14px; }
+  th { color: #999; font-weight: 600; }
+  img { width: 30px; height: 30px; border-radius: 50%; vertical-align: middle; }
+  button { padding: 6px 12px; border-radius: 6px; border: none; background: #2481cc; color: #fff; cursor: pointer; }
+  input { padding: 6px; border-radius: 6px; border: 1px solid #333; background: #1c1c22; color: #fff; width: 70px; }
+</style>
+</head>
+<body>
+<h1>⚙️ Krayv Admin</h1>
+<button onclick="loadUsers()">Обновить</button>
+<table id="usersTable">
+  <thead>
+    <tr><th>Фото</th><th>Ник</th><th>ID</th><th>Баланс</th><th>Изменить</th></tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<script>
+const API = window.location.origin;
+
+async function loadUsers() {
+  const res = await fetch(API + '/api/admin/users');
+  const users = await res.json();
+  const tbody = document.querySelector('#usersTable tbody');
+  tbody.innerHTML = users.map(u => `
+    <tr>
+      <td>${u.photo_url ? `<img src="${u.photo_url}">` : '—'}</td>
+      <td>@${u.username || '—'}</td>
+      <td>${u.id}</td>
+      <td>${u.balance} ⭐</td>
+      <td>
+        <input type="number" id="amt-${u.id}" placeholder="+/-">
+        <button onclick="changeBalance(${u.id})">OK</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function changeBalance(userId) {
+  const amount = parseInt(document.getElementById('amt-' + userId).value);
+  if (!amount) return;
+  await fetch(API + '/api/admin/balance', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId, amount })
+  });
+  loadUsers();
+}
+
+loadUsers();
+</script>
+</body>
+</html>
